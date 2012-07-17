@@ -1,0 +1,9 @@
+000000FA strings
+000042B8 erweiterungs-header
+000042EA strecken-info
+00004392 zwischenstop-tabelle
+
+// where does id hide?
+// C0-1: 013d-00fa=0043 -> 4300 at address 46ea
+// C0-2: 3378-00fa=327e -> 7e32 at address 4998 (delta 2ae)
+// C0-0: 3466-00fa=336c -> 6c33 at address 4c1c (delta 284) (delta 2a)
