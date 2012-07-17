@@ -17,23 +17,30 @@
 
 package de.schildbach.pte;
 
-import java.io.BufferedReader;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.Reader;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.zip.GZIPInputStream;
 
+import de.schildbach.pte.dto.Connection;
+import de.schildbach.pte.dto.Line;
 import de.schildbach.pte.dto.Location;
 import de.schildbach.pte.dto.LocationType;
 import de.schildbach.pte.dto.NearbyStationsResult;
+import de.schildbach.pte.dto.QueryConnectionsContext;
 import de.schildbach.pte.dto.QueryConnectionsResult;
 import de.schildbach.pte.dto.QueryDeparturesResult;
+import de.schildbach.pte.dto.ResultHeader;
+import de.schildbach.pte.dto.Stop;
 import de.schildbach.pte.util.ParserUtils;
 
 /**
@@ -43,6 +50,26 @@ public class NasaProvider extends AbstractHafasProvider
 {
 	public static final NetworkId NETWORK_ID = NetworkId.NASA;
 	private static final String API_BASE = "http://reiseauskunft.insa.de/bin/";
+
+	public static class Context implements QueryConnectionsContext
+	{
+		public final String context;
+
+		public Context(final String context)
+		{
+			this.context = context;
+		}
+
+		public boolean canQueryLater()
+		{
+			return context != null;
+		}
+
+		public boolean canQueryEarlier()
+		{
+			return context != null;
+		}
+	}
 
 	public NasaProvider()
 	{
@@ -174,7 +201,7 @@ public class NasaProvider extends AbstractHafasProvider
 	{
 		return xmlMLcReq(constraint);
 	}
-	
+
 	private String connectionsQueryUri(final Location from, final Location via, final Location to, final Date date, final boolean dep,
 			final String products)
 	{
@@ -182,7 +209,7 @@ public class NasaProvider extends AbstractHafasProvider
 		c.setTime(date);
 
 		final StringBuilder uri = new StringBuilder();
-		
+
 		// clientSystem=Android7&REQ0JourneyProduct_prod_list_1=11111111111&timeSel=depart&hcount=0&date=11.07.2012&ignoreMinuteRound=yes&androidversion=1.0.2&SID=A%3d1%40O%3dLeipzig%20Hbf%40X%3d12383333%40Y%3d51346546%40U%3d80%40L%3d008010205%40B%3d1%40V%3d12.9,%40p%3d1341849783%40&h2g-direct=11&time=18%3a04&REQ0HafasNumCons0=3&start=1&REQ0HafasNumCons1=0&clientDevice=Milestone&REQ0HafasNumCons2=3&htype=Milestone&ZID=A%3d1%40O%3dDresden%20Hbf%40X%3d13732038%40Y%3d51040562%40U%3d80%40L%3d008010085%40B%3d1%40V%3d12.9,%40p%3d1341849783%40&clientType=ANDROID
 
 		uri.append(API_BASE).append("query.exe/dn");
@@ -274,34 +301,364 @@ public class NasaProvider extends AbstractHafasProvider
 					uri.append("&REQ0JourneyProduct_prod_section_1_4=1");
 			}
 		}
-		
+
 		uri.append("&h2g-direct=11");
 
 		return uri.toString();
 	}
 
-	
 	@Override
-	public QueryConnectionsResult queryConnections(Location from, Location via, Location to, Date date, boolean dep, int numConnections,
+	public QueryConnectionsResult queryConnections(Location from, Location via, Location to, Date date, boolean dep, int maxNumConnections,
 			String products, WalkSpeed walkSpeed, Accessibility accessibility, Set<Option> options) throws IOException
 	{
 		final String uri = connectionsQueryUri(from, via, to, date, dep, products);
-		
-		System.out.println("===== TRYING: " + uri);
 
-		BufferedReader reader = new BufferedReader(new InputStreamReader(ParserUtils.scrapeInputStream(uri), ISO_8859_1));
-		
-		while(true)
+		System.out.println(uri);
+
+		final DataInputStream is = new DataInputStream(new BufferedInputStream(ParserUtils.scrapeInputStream(uri)));
+		is.mark(32768);
+
+		// quick check of status
+		final short status = Short.reverseBytes(is.readShort());
+		System.out.println("Status: " + status);
+
+		// quick seek for pointers
+		is.reset();
+		is.skipBytes(0x20);
+		final int serviceDaysTablePtr = Integer.reverseBytes(is.readInt());
+		final int stringTablePtr = Integer.reverseBytes(is.readInt());
+
+		is.reset();
+		is.skipBytes(0x36);
+		final int stationTablePtr = Integer.reverseBytes(is.readInt());
+		final int commentsTablePtr = Integer.reverseBytes(is.readInt());
+
+		is.reset();
+		is.skipBytes(0x46);
+		final int extensionHeaderPtr = Integer.reverseBytes(is.readInt());
+
+		// read strings
+		is.reset();
+		is.skipBytes(stringTablePtr);
+		final byte[] stringTable = new byte[serviceDaysTablePtr - stringTablePtr];
+		is.readFully(stringTable);
+
+		is.reset();
+		is.skipBytes(extensionHeaderPtr);
+
+		// read extension header
+		final int extensionHeaderLength = Integer.reverseBytes(is.readInt());
+		if (extensionHeaderLength < 0x32)
+			throw new IllegalArgumentException("too short: " + extensionHeaderLength);
+		is.readInt();
+		is.readShort();
+		final String requestId = string(is, stringTable).toString();
+		System.out.println("Request-ID: " + requestId);
+		final int connectionDetailsPtr = Integer.reverseBytes(is.readInt());
+
+		// determine stops offset
+		is.reset();
+		is.skipBytes(connectionDetailsPtr + 0x0c);
+		final short stopsOffset = Short.reverseBytes(is.readShort());
+		System.out.println("stopsOffset: " + stopsOffset);
+
+		// read stations
+		is.reset();
+		is.skipBytes(stationTablePtr);
+		final byte[] stationTable = new byte[commentsTablePtr - stationTablePtr];
+		is.readFully(stationTable);
+
+		// read comments
+		is.reset();
+		is.skipBytes(commentsTablePtr);
+		final byte[] commentsTable = new byte[connectionDetailsPtr - commentsTablePtr];
+		is.readFully(commentsTable);
+
+		// really read header
+		is.reset();
+		is.skipBytes(0x02);
+
+		final Location resFrom = location(is, stringTable);
+		System.out.println("From: " + resFrom.toDebugString());
+
+		final Location resTo = location(is, stringTable);
+		System.out.println("To: " + resTo.toDebugString());
+
+		final short numConnections = Short.reverseBytes(is.readShort());
+		System.out.println("Num connections: " + numConnections);
+
+		is.readInt();
+
+		is.readInt();
+
+		final long resDate = date(is);
+
+		final ResultHeader header = new ResultHeader(SERVER_PRODUCT, null, 0, null);
+
+		final List<Connection> connections = new ArrayList<Connection>(numConnections);
+
+		// read connections
+		for (int iConnection = 0; iConnection < numConnections; iConnection++)
 		{
-			String line = reader.readLine();
-			if(line == null)
-				break;
+			System.out.println("=== connection " + iConnection);
+
+			is.reset();
+			is.skipBytes(0x4a + iConnection * 12);
+
+			is.readShort(); // service days
+
+			final int offset = Integer.reverseBytes(is.readInt());
+
+			final short numParts = Short.reverseBytes(is.readShort());
+			System.out.println("  numParts: " + numParts);
+
+			final short numChanges = Short.reverseBytes(is.readShort());
+			System.out.println("  numChanges: " + numChanges);
+
+			final long duration = time(is, 0);
+			System.out.println("  duration: " + duration);
+
+			is.reset();
+			is.skipBytes(connectionDetailsPtr + 0x0e + iConnection * 2);
+			final short connectionDetailsOffset = Short.reverseBytes(is.readShort());
+
+			is.reset();
+			is.skipBytes(connectionDetailsPtr + connectionDetailsOffset);
+			final short hasRealtime = Short.reverseBytes(is.readShort());
+			System.out.println("  hasRealtime: " + hasRealtime);
 			
-			System.out.println(line);
+			final short delay = Short.reverseBytes(is.readShort());
+			System.out.println("  delay: " + delay);
+			
+			final List<Connection.Part> parts = new ArrayList<Connection.Part>(numParts);
+
+			for (int iPart = 0; iPart < numParts; iPart++)
+			{
+				System.out.println("  === part " + iPart);
+
+				is.reset();
+				is.skipBytes(0x4a + offset + iPart * 20);
+
+				final long plannedDepartureTime = time(is, resDate);
+				System.out.println("    plannedDepartureTime: " + new Date(plannedDepartureTime));
+
+				final Location departure = station(is, stationTable, stringTable);
+				System.out.println("    departure: " + departure.toDebugString());
+
+				final long plannedArrivalTime = time(is, resDate);
+				System.out.println("    plannedArrivalTime: " + new Date(plannedArrivalTime));
+
+				final short type = Short.reverseBytes(is.readShort());
+				System.out.println("    type: " + type);
+
+				final Location arrival = station(is, stationTable, stringTable);
+				System.out.println("    arrival: " + arrival.toDebugString());
+
+				final String lineStr = string(is, stringTable).toString();
+				System.out.println("    line: " + lineStr);
+
+				final String departurePosition = string(is, stringTable).toString();
+				System.out.println("    departurePosition: " + departurePosition);
+
+				final String arrivalPosition = string(is, stringTable).toString();
+				System.out.println("    arrivalPosition: " + arrivalPosition);
+
+				System.out.println("    ?: " + is.readShort());
+
+				final CharSequence[] comments = comments(is, commentsTable, stringTable);
+				System.out.println("    " + Arrays.toString(comments));
+
+				is.reset();
+				is.skipBytes(connectionDetailsPtr + connectionDetailsOffset + 0x0c + iPart * 16);
+
+				final long predictedDepartureTime = time(is, resDate);
+				System.out.println("    predictedDepartureTime: " + new Date(predictedDepartureTime));
+
+				final long predictedArrivalTime = time(is, resDate);
+				System.out.println("    predictedArrivalTime: " + new Date(predictedArrivalTime));
+
+				is.readInt();
+
+				is.readInt();
+
+				final short firstStopIndex = Short.reverseBytes(is.readShort());
+				System.out.println("   firstStopIndex: " + firstStopIndex);
+
+				final short numStops = Short.reverseBytes(is.readShort());
+				System.out.println("   numStops: " + numStops);
+
+				List<Stop> intermediateStops = null;
+
+				if (numStops > 0)
+				{
+					is.reset();
+					is.skipBytes(connectionDetailsPtr + stopsOffset + firstStopIndex);
+
+					intermediateStops = new ArrayList<Stop>(numStops);
+
+					for (int iStop = 0; iStop < numStops; iStop++)
+					{
+						final long plannedStopDepartureTime = time(is, resDate);
+						System.out.println("      plannedStopDepartureTime: " + new Date(plannedStopDepartureTime));
+
+						final long plannedStopArrivalTime = time(is, resDate);
+						System.out.println("      plannedStopArrivalTime: " + new Date(plannedStopArrivalTime));
+
+						is.readInt();
+
+						is.readInt();
+
+						final long predictedStopDepartureTime = time(is, resDate);
+						System.out.println("      predictedStopDepartureTime: " + new Date(predictedStopDepartureTime));
+
+						final long predictedStopArrivalTime = time(is, resDate);
+						System.out.println("      predictedStopArrivalTime: " + new Date(predictedStopArrivalTime));
+
+						is.readInt();
+
+						is.readInt();
+
+						final Location stopLocation = station(is, stationTable, stringTable);
+						System.out.println("      stop: " + stopLocation.toDebugString());
+
+						final Stop stop = new Stop(stopLocation, null, new Date(plannedStopDepartureTime));
+
+						intermediateStops.add(stop);
+					}
+				}
+
+				final Connection.Part part;
+				if ("Fussweg".equals(lineStr))
+				{
+					final int min = (int) ((plannedArrivalTime - plannedDepartureTime) / 1000);
+
+					part = new Connection.Footway(min, departure, arrival, null);
+				}
+				else
+				{
+					final Line line = parseLineWithoutType(lineStr);
+
+					part = new Connection.Trip(line, null, new Date(plannedDepartureTime), null, departurePosition, departure, new Date(
+							plannedArrivalTime), null, arrivalPosition, arrival, intermediateStops, null);
+				}
+				parts.add(part);
+			}
+
+			final Connection connection = new Connection(null, null, from, to, parts, null, null, (int) numChanges);
+
+			connections.add(connection);
 		}
-		
-		// TODO Auto-generated method stub
-		return super.queryConnections(from, via, to, date, dep, numConnections, products, walkSpeed, accessibility, options);
+
+		is.close();
+
+		final QueryConnectionsResult result = new QueryConnectionsResult(header, uri, resFrom, via, resTo, new Context(requestId), connections);
+
+		return result;
+	}
+
+	private Location location(final DataInputStream is, final byte[] stringTable) throws IOException
+	{
+		final String name = string(is, stringTable).toString();
+		is.readShort();
+		is.readShort();
+		final int lon = Integer.reverseBytes(is.readInt());
+		final int lat = Integer.reverseBytes(is.readInt());
+
+		return new Location(LocationType.STATION, 0, lat, lon, null, name);
+	}
+
+	private Location station(final DataInputStream is, final byte[] stationTable, final byte[] stringTable) throws IOException
+	{
+		final short index = Short.reverseBytes(is.readShort());
+		final int ptr = index * 14;
+
+		final DataInputStream stationInputStream = new DataInputStream(new ByteArrayInputStream(stationTable, ptr, 14));
+
+		try
+		{
+			final String name = string(stationInputStream, stringTable).toString();
+			final int id = Integer.reverseBytes(stationInputStream.readInt());
+			final int lon = Integer.reverseBytes(stationInputStream.readInt());
+			final int lat = Integer.reverseBytes(stationInputStream.readInt());
+
+			return new Location(LocationType.STATION, id, lat, lon, null, name);
+		}
+		finally
+		{
+			stationInputStream.close();
+		}
+	}
+
+	private long date(final DataInputStream is) throws IOException
+	{
+		final short days = Short.reverseBytes(is.readShort());
+
+		final Calendar date = new GregorianCalendar(timeZone());
+		date.clear();
+		date.set(Calendar.YEAR, 1980);
+		date.set(Calendar.DAY_OF_YEAR, days);
+
+		return date.getTimeInMillis();
+	}
+
+	private long time(final DataInputStream is, final long baseDate) throws IOException
+	{
+		final short value = Short.reverseBytes(is.readShort());
+
+		final int hours = value / 100;
+		final int minutes = value % 100;
+
+		final Calendar time = new GregorianCalendar(timeZone());
+		time.setTimeInMillis(baseDate);
+		time.add(Calendar.HOUR, hours);
+		time.add(Calendar.MINUTE, minutes);
+
+		return time.getTimeInMillis();
+	}
+
+	private CharSequence string(final DataInputStream is, final byte[] stringTable) throws IOException
+	{
+		final short pointer = Short.reverseBytes(is.readShort());
+
+		final InputStreamReader reader = new InputStreamReader(new ByteArrayInputStream(stringTable, pointer, stringTable.length - pointer), UTF_8);
+
+		try
+		{
+			final StringBuilder builder = new StringBuilder();
+
+			int c;
+			while ((c = reader.read()) != 0)
+				builder.append((char) c);
+
+			return builder;
+		}
+		finally
+		{
+			reader.close();
+		}
+	}
+
+	private CharSequence[] comments(final DataInputStream is, final byte[] commentsTable, final byte[] stringTable) throws IOException
+	{
+		final short pointer = Short.reverseBytes(is.readShort());
+
+		final DataInputStream commentsInputStream = new DataInputStream(new ByteArrayInputStream(commentsTable, pointer, commentsTable.length
+				- pointer));
+
+		try
+		{
+			final short numComments = Short.reverseBytes(commentsInputStream.readShort());
+			final CharSequence[] comments = new CharSequence[numComments];
+
+			for (int i = 0; i < numComments; i++)
+				comments[i] = string(commentsInputStream, stringTable);
+
+			return comments;
+		}
+		finally
+		{
+			commentsInputStream.close();
+		}
 	}
 
 	@Override
