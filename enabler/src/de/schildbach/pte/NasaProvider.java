@@ -448,11 +448,11 @@ public class NasaProvider extends AbstractHafasProvider
 				final long plannedArrivalTime = time(is, resDate);
 				System.out.println("    plannedArrivalTime: " + new Date(plannedArrivalTime));
 
-				final short type = Short.reverseBytes(is.readShort());
-				System.out.println("    type: " + type);
-
 				final Location arrival = station(is, stationTable, stringTable);
 				System.out.println("    arrival: " + arrival.toDebugString());
+
+				final short type = Short.reverseBytes(is.readShort());
+				System.out.println("    type: " + type);
 
 				final String lineStr = string(is, stringTable).toString();
 				System.out.println("    line: " + lineStr);
@@ -528,7 +528,7 @@ public class NasaProvider extends AbstractHafasProvider
 				}
 
 				final Connection.Part part;
-				if ("Fussweg".equals(lineStr))
+				if (type == 1)
 				{
 					final int min = (int) ((plannedArrivalTime - plannedDepartureTime) / 1000);
 
