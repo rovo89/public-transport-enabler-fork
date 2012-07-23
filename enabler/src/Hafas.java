@@ -28,7 +28,7 @@ public class Hafas {
 	}
 	
 	public static char[] getFile() throws IOException {
-		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\chemnitz"), "iso-8859-1");
+		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\chemnitz4"), "iso-8859-1");
 		StringBuilder buf = new StringBuilder();
 		char[] temp = new char[1024];
 		int read;
@@ -178,7 +178,7 @@ public class Hafas {
     	
     	public String getConnectionDays() {
     		int addr = getConnectionDaysTable() + getWord(0x4a + connIdx*0xc);
-    		return getString(getWord(addr));
+    		return getString(addr);
     	}
     	
     	public int getConnectionPartWordField(int partIdx, int field) {
@@ -188,7 +188,7 @@ public class Hafas {
     	
     	public String getConnectionPartStringField(int partIdx, int field) {
     		int partsTable = getDword(0x4a + connIdx*0xc + 2);
-    		return getString(getWord(0x4a + partsTable + partIdx*0x14 + field));
+    		return getString(0x4a + partsTable + partIdx*0x14 + field);
     	}
     	
     	public int getPartPlannedDepartureTime(int partIdx) {
@@ -265,12 +265,12 @@ public class Hafas {
     	
     	public String getPartRealtimeDepartureTrack(int partIdx) {
     		int addr = connectionOffset + getConnectionPartInfoOffset() + getConnectionPartInfoSize() * partIdx + 0x4;
-    		return getString(getWord(addr));
+    		return getString(addr);
     	}
     	
     	public String getPartRealtimeArrivalTrack(int partIdx) {
     		int addr = connectionOffset + getConnectionPartInfoOffset() + getConnectionPartInfoSize() * partIdx + 0x6;
-    		return getString(getWord(addr));
+    		return getString(addr);
     	}
     	
     	private String trimTrack(String track) {
@@ -332,7 +332,7 @@ public class Hafas {
     	
     	public String getPartNote(int partIdx, int noteIdx) {
     		int addr = getNotesTable() + getConnectionPartWordField(partIdx, 0x12) + 2 + noteIdx*2;
-    		return getString(getWord(addr));
+    		return getString(addr);
     	}
     	
     	public Hashtable<String, String> getConnectionAttributes() {
@@ -389,13 +389,13 @@ public class Hafas {
     		if (!departure)
     			stop += 0x2;
     		
-    		return getString(getWord(stop + 0x4)); 
+    		return getString(stop + 0x4); 
     	}
     }
     
 	public static String getEncoding() {
 		if (extendedHeader != 0 && extendedHeaderSize >= 0x22)
-			return getString(getWord(extendedHeader + 0x20));
+			return getString(extendedHeader + 0x20);
 		else
 			return "iso-8859-1";
 	}
@@ -477,7 +477,7 @@ public class Hafas {
     }
     
     public static String getStationName(int idx) {
-    	return getString(getWord(getStationsTable() + idx*0xe));
+    	return getString(getStationsTable() + idx*0xe);
     }
     
     public static int getStationId(int idx) {
@@ -500,7 +500,7 @@ public class Hafas {
     
     public static String getIdent() {
     	if (extendedHeader != 0)
-    		return getString(getWord(extendedHeader + 0xa));
+    		return getString(extendedHeader + 0xa);
    		return null;
     }
     
@@ -536,8 +536,8 @@ public class Hafas {
 			return null;
 		
 		String[] result = new String[2];
-		result[0] = getString(getWord(offset + pos*4));
-		result[1] = getString(getWord(offset + pos*4 + 2));
+		result[0] = getString(offset + pos*4);
+		result[1] = getString(offset + pos*4 + 2);
 		return result;
 	}
 	
@@ -609,7 +609,7 @@ public class Hafas {
 			while (bla != 0) {
 				int bla2 = getWord(K + bla + 0x4) & 3;
 				if (bla2 > 0) {
-					String value = getString(getWord(K + bla + 0xa));
+					String value = getString(K + bla + 0xa);
 					table.put(K + bla, value);
 				}
 				
@@ -651,7 +651,7 @@ public class Hafas {
 	
 	public static String getString(int pos) {
 		int stringsStart = getDword(0x24);
-		pos += stringsStart;
+		pos = stringsStart + getWord(pos);
 		
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		while (true) {
