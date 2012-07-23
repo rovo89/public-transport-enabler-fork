@@ -1,7 +1,7 @@
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.util.Calendar;
@@ -14,7 +14,7 @@ import java.util.Hashtable;
 public class Hafas {
 	private static boolean DEBUG = false;
 	
-	private static byte[] buf;
+	private static char[] buf;
     private static boolean isUtf8 = false;
     private static int connectionsHeader;
     private static int extendedHeader;
@@ -27,17 +27,20 @@ public class Hafas {
 		DEBUG = true;
 	}
 	
-	public static byte[] getFile() throws IOException {
-		InputStream is = new FileInputStream("D:\\Android\\bahn\\chemnitz4");
-		ByteArrayOutputStream buf = new ByteArrayOutputStream();
-		byte[] temp = new byte[1024];
+	public static char[] getFile() throws IOException {
+		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\chemnitz"), "iso-8859-1");
+		StringBuilder buf = new StringBuilder();
+		char[] temp = new char[1024];
 		int read;
 		
-		while ((read = is.read(temp)) > 0) {
-			buf.write(temp, 0, read);
+		while ((read = reader.read(temp)) > 0) {
+			buf.append(temp, 0, read);
 		}
-		is.close();
-		return buf.toByteArray();
+		reader.close();
+		
+		char[] result = new char[buf.length()];
+		buf.getChars(0, buf.length(), result, 0);
+		return result;
 	}
 
     public static void decode() throws Exception {
@@ -626,22 +629,22 @@ public class Hafas {
 	}
 	
 	public static int getDword(int pos) {
-		int result = unsigned(buf[pos])
-		           + unsigned(buf[pos+1]) * 0x100
-		           + unsigned(buf[pos+2]) * 0x10000
-		           + unsigned(buf[pos+3]) * 0x1000000;
+		int result = buf[pos]
+		           + buf[pos+1] * 0x100
+		           + buf[pos+2] * 0x10000
+		           + buf[pos+3] * 0x1000000;
 		if (DEBUG) System.out.printf("getDword(0x%x) = 0x%x\n", pos, result);
 		return result;
 	}
 	
 	public static int getWord(int pos) {
-		int result = unsigned(buf[pos]) +unsigned(buf[pos+1]) * 0x100;
+		int result = buf[pos] + buf[pos+1] * 0x100;
 		if (DEBUG) System.out.printf("getWord(0x%x) = 0x%x\n", pos, result);
 		return result;
 	}
 	
 	public static int getByte(int pos) {
-		int result = unsigned(buf[pos]);
+		int result = buf[pos];
 		if (DEBUG) System.out.printf("getByte(0x%x) = 0x%x\n", pos, result);
 		return result;
 	}
@@ -652,7 +655,7 @@ public class Hafas {
 		
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		while (true) {
-			byte b = buf[pos++];
+			char b = buf[pos++];
 			if (b == 0)
 				break;
 			bytes.write(b);
