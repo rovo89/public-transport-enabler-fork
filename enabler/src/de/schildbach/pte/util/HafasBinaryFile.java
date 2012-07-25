@@ -200,7 +200,7 @@ public class HafasBinaryFile
 	}
 
 
-	public Location getStation(final int idx)
+	private Location getStation(final int idx)
 	{
 		final int ptr = stationsTable + idx * 14;
 		final String name = getString(ptr);
@@ -212,12 +212,32 @@ public class HafasBinaryFile
 
 	public Location getFrom()
 	{
-		return new Location(LocationType.STATION, 0, getDword(0xc), getDword(0x8), null, getString(0x2));
+		return getFromTo(true);
 	}
-
 	public Location getTo()
 	{
-		return new Location(LocationType.STATION, 0, getDword(0x1a), getDword(0x16), null, getString(0x10));
+		return getFromTo(false);
+	}
+	private Location getFromTo(boolean from)
+	{
+		int offset = from ? 0 : 14;
+		
+		final LocationType type;
+		switch (getWord(offset + 0x6)) {
+			case 1:
+				type = LocationType.STATION;
+				break;
+			case 2:
+				type = LocationType.ADDRESS;
+				break;
+			case 3:
+				type = LocationType.POI;
+				break;
+			default:
+				type = LocationType.ANY;
+		}
+		
+		return new Location(type, 0, getDword(offset + 0xc), getDword(offset + 0x8), null, getString(offset + 0x2));
 	}
 
 	public String getRequestId()

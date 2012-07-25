@@ -20,6 +20,8 @@ public class TestHafasBinary {
 		System.out.println("Request ID: " + f.getRequestId());
 		System.out.println("ld: " + f.getLoad());
 		System.out.println("Sequence: " + f.getSeqNr());
+		System.out.println("From: " + f.getFrom() + ", Type: " + f.getFrom().type);
+		System.out.println("To: " + f.getTo() + ", Type: " + f.getTo().type);
 		System.out.println();
 		
 		for (HafasBinaryFile.Connection c : f.getConnections())
@@ -73,7 +75,7 @@ public class TestHafasBinary {
 	}
 
 	public static char[] getFile() throws IOException {
-		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\insa-bytes.txt"), "iso-8859-1");
+		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\chemnitz4"), "iso-8859-1");
 		StringBuilder buf = new StringBuilder();
 		char[] temp = new char[1024];
 		int read;

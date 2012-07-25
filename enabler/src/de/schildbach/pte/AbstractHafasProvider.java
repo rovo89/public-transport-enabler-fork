@@ -1444,7 +1444,16 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 				final Location partArrival = p.getArrivalStation();
 				if (partType == 1)
 				{
-					parts.add(new Connection.Footway(p.getFootwayDuration(), partDeparture, partArrival, null));
+					if (!p.shouldHide()) {
+						parts.add(new Connection.Footway(p.getFootwayDuration(), partDeparture, partArrival, null));
+					} else {
+						Connection.Part previous = parts.get(parts.size() - 1);
+						if (previous instanceof Connection.Footway) {
+							parts.remove(parts.size() - 1);
+							final int min = ((Connection.Footway) previous).min + p.getFootwayDuration();
+							parts.add(new Connection.Footway(min, previous.departure, partArrival, null));
+						}
+					}
 				}
 				else if (partType == 2)
 				{
