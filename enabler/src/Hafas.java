@@ -28,7 +28,7 @@ public class Hafas {
 	}
 	
 	public static char[] getFile() throws IOException {
-		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\chemnitz4"), "iso-8859-1");
+		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\scroll9"), "iso-8859-1");
 		StringBuilder buf = new StringBuilder();
 		char[] temp = new char[1024];
 		int read;
@@ -78,12 +78,16 @@ public class Hafas {
 		// ok, call d() and return this
 		*/
 		
+		System.out.println(getIdent());
+		System.out.println(getLd());
+		System.out.println(getRequestAttributes());
 		System.out.println(date(getTravelDate()));
 		System.out.println(date(getTravelDatePlus30()));
 		
 		int connectionCount = getConnectionCount();
 		int specialConnectionIdx = getSpecialConnectionIdx();
 		if (specialConnectionIdx != -1) {
+			System.out.println("Found special connection");
 			Connection specialConnection = new Connection(specialConnectionIdx);
 			connectionCount--;
 		}
@@ -98,7 +102,8 @@ public class Hafas {
 			System.out.println("Connection attributes: " + c.getConnectionAttributes());
 			System.out.println("Changes: " + c.getConnectionChanges());
 			System.out.println("Duration: " + time(c.getConnectionDuration()));
-			System.out.println("Days: " + c.getConnectionDays());
+			System.out.println("Day (relative to start date): " + c.getConnectionDay());
+			System.out.println("Service days: " + c.getConnectionDays());
 			System.out.println();
 			
 			for (int i = 0; i < c.getConnectionPartCount(); i++) {
@@ -179,6 +184,26 @@ public class Hafas {
     	public String getConnectionDays() {
     		int addr = getConnectionDaysTable() + getWord(0x4a + connIdx*0xc);
     		return getString(addr);
+    	}
+    	
+    	public int getConnectionDay() {
+    		int addr = getConnectionDaysTable() + getWord(0x4a + connIdx*0xc);
+    		int serviceBitBase = getWord(addr + 2);
+    		int serviceBitBytes = getWord(addr + 4);
+    		int day = serviceBitBase*8;
+    		for (int i = 0; i < serviceBitBytes; i++) {
+    			int serviceBits = getByte(addr + 6 + i);
+    			if (serviceBits == 0) {
+    				day += 8;
+    				continue;
+    			}
+    			while ((serviceBits & 0x80) == 0) {
+    				serviceBits = serviceBits << 1;
+    				day++;
+    			}
+    			break;
+    		}
+    		return day;
     	}
     	
     	public int getConnectionPartWordField(int partIdx, int field) {
@@ -504,6 +529,12 @@ public class Hafas {
    		return null;
     }
     
+    public static String getLd() {
+    	if (extendedHeader != 0)
+    		return getString(extendedHeader + 0x22);
+   		return null;
+    }
+    
     public static Hashtable<String, String> getRequestAttributes() {
     	if (extendedHeader == 0 || extendedHeaderSize < 0x32)
     		return null;
@@ -624,9 +655,6 @@ public class Hafas {
 	
 	
 	// helpers
-	public static int unsigned(byte b) {
-		return b & 0xff;
-	}
 	
 	public static int getDword(int pos) {
 		int result = buf[pos]
@@ -678,8 +706,7 @@ public class Hafas {
     
     public static String date(int i) {
     	Calendar cal = Calendar.getInstance();
-    	cal.set(1980, 0, 1, 0, 0, 0);
-    	cal.add(Calendar.DAY_OF_MONTH, i);
+    	cal.set(1980, 0, i, 0, 0, 0);
     	return DateFormat.getDateTimeInstance().format(cal.getTime());
     }
     
