@@ -497,7 +497,7 @@ public final class BvgProvider extends AbstractHafasProvider
 		final StringBuilder uri = new StringBuilder(API_BASE);
 		uri.append("query.bin/dn");
 
-		appendConnectionsQueryUri(uri, from, via, to, date, dep, products);
+		appendConnectionsQueryUri(uri, from, via, to, date, dep, products, null);
 
 		if (additionalQueryParameter != null)
 			uri.append('&').append(additionalQueryParameter);

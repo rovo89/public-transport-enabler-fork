@@ -760,7 +760,7 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 	}
 
 	protected void appendConnectionsQueryUri(final StringBuilder uri, final Location from, final Location via, final Location to, final Date date,
-			final boolean dep, final String products)
+			final boolean dep, final String products, Set<Option> options)
 	{
 		uri.append("?start=Suchen");
 
@@ -872,7 +872,7 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 		
 		if (shouldQueryConnectionsBinary()) {
 			final StringBuilder request = new StringBuilder(apiUri);
-			appendConnectionsQueryUri(request, from, via, to, date, dep, products);
+			appendConnectionsQueryUri(request, from, via, to, date, dep, products, options);
 			request.append("&h2g-direct=11");
 			return queryConnectionsBinary(request.toString());
 		}
