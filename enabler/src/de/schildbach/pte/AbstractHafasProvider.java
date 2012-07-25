@@ -17,7 +17,6 @@
 
 package de.schildbach.pte;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -55,7 +54,6 @@ import de.schildbach.pte.dto.NearbyStationsResult;
 import de.schildbach.pte.dto.Point;
 import de.schildbach.pte.dto.QueryConnectionsContext;
 import de.schildbach.pte.dto.QueryConnectionsResult;
-import de.schildbach.pte.dto.QueryConnectionsResult.Status;
 import de.schildbach.pte.dto.QueryDeparturesResult;
 import de.schildbach.pte.dto.ResultHeader;
 import de.schildbach.pte.dto.StationDepartures;
@@ -146,6 +144,11 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 	protected TimeZone timeZone()
 	{
 		return TimeZone.getTimeZone("CET");
+	}
+	
+	protected boolean shouldQueryConnectionsBinary()
+	{
+		return false;
 	}
 
 	protected final String allProductsString()
@@ -866,6 +869,13 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 		}
 
 		final char bikeChar = (options != null && options.contains(Option.BIKE)) ? '1' : '0';
+		
+		if (shouldQueryConnectionsBinary()) {
+			final StringBuilder request = new StringBuilder(apiUri);
+			appendConnectionsQueryUri(request, from, via, to, date, dep, products);
+			request.append("&h2g-direct=11");
+			return queryConnectionsBinary(request.toString());
+		}
 
 		final StringBuilder request = new StringBuilder("<ConReq deliverPolyline=\"1\">");
 		request.append("<Start>").append(locationXml(from));
@@ -900,8 +910,11 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 	public QueryConnectionsResult queryMoreConnections(final QueryConnectionsContext contextObj, final boolean later, final int numConnections)
 			throws IOException
 	{
-		if (true)
-			return new QueryConnectionsResult(new ResultHeader(SERVER_PRODUCT), Status.NO_CONNECTIONS);
+		if (shouldQueryConnectionsBinary()) {
+			final Context context = (Context) contextObj;
+			String uri = later ? context.laterContext : context.earlierContext;
+			return queryConnectionsBinary(uri);
+		}
 		
 		final Context context = (Context) contextObj;
 
@@ -1405,29 +1418,11 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 		return true;
 	}
 	
-	public static char[] getFile() throws IOException
-	{
-		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\karlsruhe"), "iso-8859-1");
-		StringBuilder buf = new StringBuilder();
-		char[] temp = new char[1024];
-		int read;
-		
-		while ((read = reader.read(temp)) > 0) {
-			buf.append(temp, 0, read);
-		}
-		reader.close();
-		
-		char[] result = new char[buf.length()];
-		buf.getChars(0, buf.length(), result, 0);
-		return result;
-	}
-	
-	protected QueryConnectionsResult queryConnectionsBinary(final String uri) throws IOException
+	private QueryConnectionsResult queryConnectionsBinary(final String uri) throws IOException
 	{
 		char[] buf = ParserUtils.scrape(uri, null, ISO_8859_1, null).toString().toCharArray();
-		//char[] buf = getFile();
-		
 		HafasBinaryFile f = new HafasBinaryFile(buf, timeZone());
+		
 		final ResultHeader header = new ResultHeader(SERVER_PRODUCT);
 		
 		final Location resFrom = f.getFrom();
@@ -1493,11 +1488,32 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 			connections.add(new Connection(id, null, departure, arrival, parts, null, null, numChanges));
 		}
 		
-		final QueryConnectionsResult result = new QueryConnectionsResult(header, uri, resFrom, /* via */null, resTo,
-				new StringContext(f.getRequestId()), connections);
+		final String requestId = f.getRequestId();
+		final String ld = f.getLoad();
+		final int seqNr = f.getSeqNr();
 		
-		return result;
+		final Context context = new Context(
+				getScrollUri(requestId, ld, seqNr, true),
+				getScrollUri(requestId, ld, seqNr, false),
+				seqNr);
+		
+		return new QueryConnectionsResult(header, uri, resFrom, /* via */null, resTo, context, connections);
 	}
+
+	protected String getScrollUri(String requestId, String ld, int seqNr, boolean later)
+	{
+		final StringBuilder uri = new StringBuilder(apiUri);
+		uri.append("?ident=").append(requestId);
+		if (ld != null)
+			uri.append("&ld=").append(ld);
+		uri.append("&seqnr=").append(seqNr);
+		uri.append("&REQ0HafasScrollDir=").append(later ? 1 : 2);
+		
+		if (shouldQueryConnectionsBinary())
+			uri.append("&h2g-direct=11");
+		
+	    return uri.toString();
+    }
 
 	private static final Pattern P_XML_NEARBY_STATIONS_COARSE = Pattern.compile("\\G<\\s*St\\s*(.*?)/?>(?:\n|\\z)", Pattern.DOTALL);
 	private static final Pattern P_XML_NEARBY_STATIONS_FINE = Pattern.compile("" //

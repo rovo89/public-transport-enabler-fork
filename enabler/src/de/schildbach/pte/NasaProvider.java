@@ -18,14 +18,11 @@
 package de.schildbach.pte;
 
 import java.io.IOException;
-import java.util.Date;
 import java.util.List;
-import java.util.Set;
 
 import de.schildbach.pte.dto.Location;
 import de.schildbach.pte.dto.LocationType;
 import de.schildbach.pte.dto.NearbyStationsResult;
-import de.schildbach.pte.dto.QueryConnectionsResult;
 import de.schildbach.pte.dto.QueryDeparturesResult;
 
 /**
@@ -53,6 +50,11 @@ public class NasaProvider extends AbstractHafasProvider
 				return true;
 
 		return false;
+	}
+	
+	@Override
+	protected boolean shouldQueryConnectionsBinary() {
+	    return true;
 	}
 
 	@Override
@@ -165,30 +167,6 @@ public class NasaProvider extends AbstractHafasProvider
 	public List<Location> autocompleteStations(final CharSequence constraint) throws IOException
 	{
 		return xmlMLcReq(constraint);
-	}
-
-	private String connectionsQueryUri(final Location from, final Location via, final Location to, final Date date, final boolean dep,
-			final String products)
-	{
-		final StringBuilder uri = new StringBuilder(API_BASE);
-		uri.append("query.exe/dn");
-
-		appendConnectionsQueryUri(uri, from, via, to, date, dep, products);
-
-		// clientSystem=Android7&REQ0JourneyProduct_prod_list_1=11111111111&timeSel=depart&hcount=0&date=11.07.2012&ignoreMinuteRound=yes&androidversion=1.0.2&SID=A%3d1%40O%3dLeipzig%20Hbf%40X%3d12383333%40Y%3d51346546%40U%3d80%40L%3d008010205%40B%3d1%40V%3d12.9,%40p%3d1341849783%40&h2g-direct=11&time=18%3a04&REQ0HafasNumCons0=3&start=1&REQ0HafasNumCons1=0&clientDevice=Milestone&REQ0HafasNumCons2=3&htype=Milestone&ZID=A%3d1%40O%3dDresden%20Hbf%40X%3d13732038%40Y%3d51040562%40U%3d80%40L%3d008010085%40B%3d1%40V%3d12.9,%40p%3d1341849783%40&clientType=ANDROID
-		uri.append("&h2g-direct=11");
-
-		return uri.toString();
-	}
-
-	@Override
-	public QueryConnectionsResult queryConnections(final Location from, final Location via, final Location to, final Date date, final boolean dep,
-			final int maxNumConnections, final String products, final WalkSpeed walkSpeed, final Accessibility accessibility,
-			final Set<Option> options) throws IOException
-	{
-		final String uri = connectionsQueryUri(from, via, to, date, dep, products);
-
-		return queryConnectionsBinary(uri);
 	}
 
 	@Override

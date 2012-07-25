@@ -222,12 +222,18 @@ public class HafasBinaryFile
 	
 	public String getRequestId()
 	{
-    	return getString(extendedHeader + 0xa);
+    	return normalizeString(getString(extendedHeader + 0xa));
 	}
 	
-    public String getLd()
+    public String getLoad()
     {
-    	return getString(extendedHeader + 0x22);
+    	return normalizeString(getString(extendedHeader + 0x22));
+    }
+    
+    public int getSeqNr()
+    {
+    	int result = getWord(extendedHeader + 0x8);
+    	return (result != 0xffff) ? result : 1;
     }
     
     public Vector<HafasBinaryFile.Connection> getConnections()

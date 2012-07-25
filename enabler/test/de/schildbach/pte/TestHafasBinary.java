@@ -18,7 +18,8 @@ public class TestHafasBinary {
 		HafasBinaryFile f = new HafasBinaryFile(buf, TimeZone.getTimeZone("CET"));
 		
 		System.out.println("Request ID: " + f.getRequestId());
-		System.out.println("ld: " + f.getLd());
+		System.out.println("ld: " + f.getLoad());
+		System.out.println("Sequence: " + f.getSeqNr());
 		System.out.println();
 		
 		for (HafasBinaryFile.Connection c : f.getConnections())
