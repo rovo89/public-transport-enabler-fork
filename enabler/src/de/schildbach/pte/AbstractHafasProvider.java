@@ -59,6 +59,7 @@ import de.schildbach.pte.dto.QueryDeparturesResult;
 import de.schildbach.pte.dto.ResultHeader;
 import de.schildbach.pte.dto.StationDepartures;
 import de.schildbach.pte.dto.Stop;
+import de.schildbach.pte.util.HafasBinaryFile;
 import de.schildbach.pte.util.ParserUtils;
 import de.schildbach.pte.util.StringReplaceReader;
 import de.schildbach.pte.util.XmlPullUtil;

@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.TimeZone;
 
-import de.schildbach.pte.HafasBinaryFile;
+import de.schildbach.pte.util.HafasBinaryFile;
 
 public class TestHafasBinary {
 	public static void main(String[] args) throws Exception

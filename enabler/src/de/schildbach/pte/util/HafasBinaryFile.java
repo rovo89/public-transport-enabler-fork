@@ -1,4 +1,4 @@
-package de.schildbach.pte;
+package de.schildbach.pte.util;
 
 import java.io.ByteArrayOutputStream;
 import java.io.UnsupportedEncodingException;
