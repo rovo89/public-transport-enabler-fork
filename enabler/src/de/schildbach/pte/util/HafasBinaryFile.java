@@ -33,6 +33,7 @@ public class HafasBinaryFile
 	private int connectionsTableOffset;
 	private int connectionPartInfoOffset;
 	private int connectionPartInfoSize;
+	private int stopsTableOffset;
 	private int stopElementSize;
 	
 	private final Vector<HafasBinaryFile.Connection> connections = new Vector<HafasBinaryFile.Connection>();
@@ -81,8 +82,12 @@ public class HafasBinaryFile
 		connectionsTableOffset = getWord(connectionsHeader + 4);
 		connectionPartInfoOffset = getWord(connectionsHeader + 6);
 		connectionPartInfoSize = getWord(connectionsHeader + 8);
-		if (connectionsTableOffset <= 0xa)
+
+		if (connectionsTableOffset > 0xa) {
 			stopElementSize = getWord(connectionsHeader + 0xa);
+			stopsTableOffset = connectionsHeader + getWord(connectionsHeader + 0xc);
+		}
+		
 			
 		final int numConnections = getWord(0x1e);
 		// TODO the original app check (extendedHeader + 0x1e) for an index of a "special" connection that is not added to the array
@@ -117,6 +122,9 @@ public class HafasBinaryFile
 	
 	private Date makeDate(final int day, final int time)
 	{
+		if (day <= 0 || time < 0 || time == 0xffff)
+			return null;
+		
 		Calendar cal = new GregorianCalendar(timezone);
 		cal.set(1980, 0, day, 0, 0, 0);
 		cal.set(Calendar.HOUR_OF_DAY, time / 100);
@@ -332,6 +340,7 @@ public class HafasBinaryFile
     	{
     		private final int partIdx;
     		private final int partInfoOffset;
+    		private final int partRealtimeInfoOffset;
     		private final Vector<HafasBinaryFile.Connection.Part.Stop> stops = new Vector<HafasBinaryFile.Connection.Part.Stop>();
     		private Hashtable<String, String> attributes;
     		private Vector<String> remarks;
@@ -340,6 +349,14 @@ public class HafasBinaryFile
     		{
     			this.partIdx = partIdx;
     			this.partInfoOffset = 0x4a + getDword(0x4a + connIdx*0xc + 2) + partIdx*0x14;
+    			this.partRealtimeInfoOffset = connectionOffset + connectionPartInfoOffset + connectionPartInfoSize * partIdx;
+    			
+    			if (stopElementSize > 0) {
+    	        	final int stopCount = getWord(partRealtimeInfoOffset + 0xe);
+    	        	for (int i = 0; i < stopCount; i++) {
+    	        		stops.add(new Stop(i));
+    	        	}
+    			}
             }
     		
         	public int getIndex() {
@@ -375,13 +392,24 @@ public class HafasBinaryFile
         	
     		public Date getEstimatedDepartureTime()
     		{
-    			int result = getWord(connectionOffset + connectionPartInfoOffset + connectionPartInfoSize * partIdx + 0);
+    			int result = getWord(partRealtimeInfoOffset + 0);
         		return (result != 0xffff) ? makeDate(connectionDay, result) : null;
         	}
         	public Date getEstimatedArrivalTime()
         	{
-    			int result = getWord(connectionOffset + connectionPartInfoOffset + connectionPartInfoSize * partIdx + 2);
+    			int result = getWord(partRealtimeInfoOffset + 2);
     			return (result != 0xffff) ? makeDate(connectionDay, result) : null;
+        	}
+        	
+    		public Date getDepartureTime()
+    		{
+        		Date result = getEstimatedDepartureTime();
+        		return (result != null) ? result : getPlannedDepartureTime();
+        	}
+        	public Date getArrivalTime()
+        	{
+        		Date result = getEstimatedArrivalTime();
+        		return (result != null) ? result : getPlannedArrivalTime();
         	}
 
         	public String getPlannedDeparturePlatform()
@@ -413,13 +441,22 @@ public class HafasBinaryFile
 
         	public String getEstimatedDeparturePlatform()
         	{
-        		String result = getString(connectionOffset + connectionPartInfoOffset + connectionPartInfoSize * partIdx + 4);
+        		String result = getString(partRealtimeInfoOffset + 4);
         		return normalizeString(result);
         	}
         	public String getEstimatedArrivalPlatform()
         	{
-        		String result = getString(connectionOffset + connectionPartInfoOffset + connectionPartInfoSize * partIdx + 6);
+        		String result = getString(partRealtimeInfoOffset + 6);
         		return normalizeString(result);
+        	}
+        	
+        	public String getDeparturePlatform() {
+        		String result = getEstimatedDeparturePlatform();
+        		return (result != null) ? result : getPlannedDeparturePlatform();
+        	}
+        	public String getArrivalPlatform() {
+        		String result = getEstimatedArrivalPlatform();
+        		return (result != null) ? result : getPlannedArrivalPlatform();
         	}
         	
         	public String getLine()
@@ -496,9 +533,84 @@ public class HafasBinaryFile
         	}
     		
     		
+    		
     		public class Stop
     		{
-    			// FIXME
+    			private final int stopIdx;
+        		private final int stopInfoOffset;
+        		
+        		public Stop(int stopIdx)
+        		{
+        			this.stopIdx = partIdx;
+        			
+        			int firstStop = getWord(partRealtimeInfoOffset + 0xc);
+        			this.stopInfoOffset = stopsTableOffset + (firstStop + stopIdx) * stopElementSize;
+                }
+        		
+            	public int getIndex() {
+            		return stopIdx;
+                }
+            	
+            	public Location getStation()
+            	{
+            		return HafasBinaryFile.this.getStation(getWord(stopInfoOffset + 0x18));
+            	}
+    			
+    			public Date getPlannedDepartureTime()
+        		{
+            		return makeDate(connectionDay, getWord(stopInfoOffset + 0));
+            	}
+            	public Date getPlannedArrivalTime()
+            	{
+            		return makeDate(connectionDay, getWord(stopInfoOffset + 2));
+            	}
+            	
+        		public Date getEstimatedDepartureTime()
+        		{
+        			return makeDate(connectionDay, getWord(stopInfoOffset + 12));
+            	}
+            	public Date getEstimatedArrivalTime()
+            	{
+            		return makeDate(connectionDay, getWord(stopInfoOffset + 14));
+            	}
+            	
+        		public Date getDepartureTime()
+        		{
+            		Date result = getEstimatedDepartureTime();
+            		return (result != null) ? result : getPlannedDepartureTime();
+            	}
+            	public Date getArrivalTime()
+            	{
+            		Date result = getEstimatedArrivalTime();
+            		return (result != null) ? result : getPlannedArrivalTime();
+            	}
+
+            	public String getPlannedDeparturePlatform()
+            	{
+            		return normalizeString(getString(stopInfoOffset + 4)); 
+            	}
+            	public String getPlannedArrivalPlatform()
+            	{
+            		return normalizeString(getString(stopInfoOffset + 6)); 
+            	}
+            	
+            	public String getEstimatedDeparturePlatform()
+            	{
+            		return normalizeString(getString(stopInfoOffset + 16));
+            	}
+            	public String getEstimatedArrivalPlatform()
+            	{
+            		return normalizeString(getString(stopInfoOffset + 18));
+            	}
+            	
+            	public String getDeparturePlatform() {
+            		String result = getEstimatedDeparturePlatform();
+            		return (result != null) ? result : getPlannedDeparturePlatform();
+            	}
+            	public String getArrivalPlatform() {
+            		String result = getEstimatedArrivalPlatform();
+            		return (result != null) ? result : getPlannedArrivalPlatform();
+            	}
     		}
     	}
     }

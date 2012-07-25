@@ -55,6 +55,7 @@ import de.schildbach.pte.dto.NearbyStationsResult;
 import de.schildbach.pte.dto.Point;
 import de.schildbach.pte.dto.QueryConnectionsContext;
 import de.schildbach.pte.dto.QueryConnectionsResult;
+import de.schildbach.pte.dto.QueryConnectionsResult.Status;
 import de.schildbach.pte.dto.QueryDeparturesResult;
 import de.schildbach.pte.dto.ResultHeader;
 import de.schildbach.pte.dto.StationDepartures;
@@ -899,6 +900,9 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 	public QueryConnectionsResult queryMoreConnections(final QueryConnectionsContext contextObj, final boolean later, final int numConnections)
 			throws IOException
 	{
+		if (true)
+			return new QueryConnectionsResult(new ResultHeader(SERVER_PRODUCT), Status.NO_CONNECTIONS);
+		
 		final Context context = (Context) contextObj;
 
 		final StringBuilder request = new StringBuilder("<ConScrReq scrDir=\"").append(later ? 'F' : 'B').append("\" nrCons=\"")
@@ -1424,7 +1428,7 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 		//char[] buf = getFile();
 		
 		HafasBinaryFile f = new HafasBinaryFile(buf, timeZone());
-		final ResultHeader header = new ResultHeader(SERVER_PRODUCT, null, 0, f);
+		final ResultHeader header = new ResultHeader(SERVER_PRODUCT);
 		
 		final Location resFrom = f.getFrom();
 		final Location resTo = f.getTo();
@@ -1468,7 +1472,12 @@ public abstract class AbstractHafasProvider extends AbstractNetworkProvider
 					final String arrivalPlatform = (estimatedArrivalPlatform != null)
 							? estimatedArrivalPlatform : plannedArrivalPlatform;
 					
-					final List<Stop> intermediateStops = null;
+					
+					final List<Stop> intermediateStops = new ArrayList<Stop>();
+					for (HafasBinaryFile.Connection.Part.Stop s : p.getStops())
+					{
+						intermediateStops.add(new Stop(s.getStation(), s.getArrivalPlatform(), s.getArrivalTime()));
+					}
 					
 					parts.add(
 						new Connection.Trip(line, direction,

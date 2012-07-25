@@ -2,16 +2,25 @@ package de.schildbach.pte;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.TimeZone;
 
 import de.schildbach.pte.util.HafasBinaryFile;
 
 public class TestHafasBinary {
+	private static DateFormat dateFormat = new SimpleDateFormat("d.M. HH:mm");;
+	
 	public static void main(String[] args) throws Exception
 	{
 		char[] buf = getFile();
 		HafasBinaryFile f = new HafasBinaryFile(buf, TimeZone.getTimeZone("CET"));
-
+		
+		System.out.println("Request ID: " + f.getRequestId());
+		System.out.println("ld: " + f.getLd());
+		System.out.println();
+		
 		for (HafasBinaryFile.Connection c : f.getConnections())
 		{
 			System.out.println("---");
@@ -28,32 +37,23 @@ public class TestHafasBinary {
 
 				System.out.println("Departure station: " + p.getDepartureStation());
 				System.out.printf("Departure time: %s (estimated: %s)\n",
-						p.getPlannedDepartureTime(), p.getEstimatedDepartureTime());
+						formatDate(p.getPlannedDepartureTime()), formatDate(p.getEstimatedDepartureTime()));
 				System.out.printf("Departure platform: %s (estimated: %s)\n",
-						p.getPlannedDeparturePlatform(), p.getEstimatedDeparturePlatform());				
-/*
-				int stopCount = c.getPartStopCount(i);
-				for (int j = 0; j < stopCount; j++) {
-					int stationIdx = c.getPartStopStationIdx(i, j);
-					int plannedArr = c.getPartStopTime(i, j, false, false);
-					int plannedDep = c.getPartStopTime(i, j, false, true);
-					int realArr = c.getPartStopTime(i, j, true, false);
-					int realDep = c.getPartStopTime(i, j, true, true);
-					System.out.printf("Stop %s {%d} %s-%s track %s > %s (realtime: %s-%s track %s > %s)\n",
-							getStationName(stationIdx), getStationId(stationIdx),
-							time(plannedArr), time(plannedDep),
-							c.getPartStopTrack(i, j, false, false).trim(),
-							c.getPartStopTrack(i, j, false, true).trim(),
-							time(realArr), time(realDep),
-							c.getPartStopTrack(i, j, true, false).trim(),
-							c.getPartStopTrack(i, j, true, true).trim()
-							);
+						p.getPlannedDeparturePlatform(), p.getEstimatedDeparturePlatform());
+				
+				for (HafasBinaryFile.Connection.Part.Stop s : p.getStops())
+				{
+					System.out.printf("Stop %s at %s to %s, track %s to %s (realtime: %s to %s, track %s to %s)\n",
+							s.getStation(),
+							formatDate(s.getPlannedArrivalTime()), formatDate(s.getPlannedDepartureTime()),
+							s.getPlannedArrivalPlatform(), s.getPlannedDeparturePlatform(),
+							formatDate(s.getEstimatedArrivalTime()), formatDate(s.getEstimatedDepartureTime()),
+							s.getEstimatedArrivalPlatform(), s.getEstimatedDeparturePlatform());
 				}
-				*/
-
+				
 				System.out.println("Arrival station: " + p.getArrivalStation());
 				System.out.printf("Arrival time: %s (estimated: %s)\n",
-						p.getPlannedArrivalTime(), p.getEstimatedArrivalTime());
+						formatDate(p.getPlannedArrivalTime()), formatDate(p.getEstimatedArrivalTime()));
 				System.out.printf("Arrival platform: %s (estimated: %s)\n",
 						p.getPlannedArrivalPlatform(), p.getEstimatedArrivalPlatform());			
 
@@ -66,9 +66,13 @@ public class TestHafasBinary {
 			}
 		}
 	}
+	
+	private static String formatDate(Date date) {
+		return (date == null) ? "null" : dateFormat.format(date);
+	}
 
 	public static char[] getFile() throws IOException {
-		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\heidelberg1"), "iso-8859-1");
+		InputStreamReader reader = new InputStreamReader(new FileInputStream("D:\\Android\\bahn\\insa-bytes.txt"), "iso-8859-1");
 		StringBuilder buf = new StringBuilder();
 		char[] temp = new char[1024];
 		int read;
